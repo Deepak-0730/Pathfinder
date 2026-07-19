@@ -142,7 +142,7 @@ def dijkstra(draw_fn, grid, start, end):
             reconstruct_path(came_from, end, draw_fn)
             return True
 
-        for neighbor in neighbor_list := current.neighbors:
+        for neighbor in current.neighbors:
             # For an unweighted grid, every step edge weight is 1
             temp_dist = current_dist + 1 
 
@@ -157,10 +157,41 @@ def dijkstra(draw_fn, grid, start, end):
                     neighbor.make_visited()
 
         draw_fn()
-        # Cap visualization frame rate so the search expansion is visible
         pygame.time.delay(5) 
 
+    # If the queue is empty and we haven't reached the end node
+    draw_text_overlay(WINDOW, "No Way to Reach the Destination!")
+    pygame.time.delay(3000)  # Freezes the screen for 3 seconds so you can read it
     return False
+
+    # --- NO PATH FOUND LOGIC ---
+    # If the while loop finishes and queue is empty, the end node is unreachable
+    print("NO WAY TO REACH: The target node is completely blocked!")
+    
+    # Optional: Flash the grid background red to visually show failure
+    for row in grid:
+        for node in row:
+            if node.color == WHITE:
+                node.color = (255, 200, 200) # Soft red flash
+    draw_fn()
+    
+    return False
+def draw_text_overlay(win, text):
+    # Setup the font (SysFont uses system fonts, 36 is the font size)
+    font = pygame.font.SysFont("arial", 36, bold=True)
+    
+    # Render the text surface (Text color: White)
+    text_surface = font.render(text, True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center=(WIDTH // 2, WIDTH // 2))
+    
+    # Create a background rectangle for the text to make it readable
+    background_rect = pygame.Rect(0, 0, text_rect.width + 40, text_rect.height + 20)
+    background_rect.center = (WIDTH // 2, WIDTH // 2)
+    
+    # Draw a dark grey box, then blit the text on top
+    pygame.draw.rect(win, (50, 50, 50), background_rect, border_radius=8)
+    win.blit(text_surface, text_rect)
+    pygame.display.update()
 
 
 def main():
