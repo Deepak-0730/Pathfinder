@@ -1,0 +1,221 @@
+import pygame
+import heapq
+import sys
+
+# Initialize Pygame
+pygame.init()
+
+# --- CONFIGURATION & COLORS ---
+WIDTH = 800
+ROWS = 40
+CELL_SIZE = WIDTH // ROWS
+WINDOW = pygame.display.set_mode((WIDTH, WIDTH))
+pygame.display.set_caption("Pathfinding Visualizer (Dijkstra)")
+
+# Color Palette (RGB)
+WHITE = (245, 245, 245)  # Unvisited
+BLACK = (30, 30, 30)      # Obstacle/Wall
+GREEN = (46, 204, 113)    # Start Node
+RED = (231, 76, 60)       # End Node
+BLUE = (52, 152, 219)     # Visited/Explored
+YELLOW = (241, 196, 15)   # Shortest Path
+GREY = (200, 200, 200)    # Grid Lines
+
+class Node:
+    def __init__(self, row, col):
+        self.row = row
+        self.col = col
+        self.x = row * CELL_SIZE
+        self.y = col * CELL_SIZE
+        self.color = WHITE
+        self.neighbors = []
+        self.distance = float("inf")
+
+    def get_pos(self):
+        return self.row, self.col
+
+    def is_wall(self):
+        return self.color == BLACK
+
+    def reset(self):
+        self.color = WHITE
+        self.distance = float("inf")
+
+    def make_start(self):
+        self.color = GREEN
+        self.distance = 0
+
+    def make_wall(self):
+        self.color = BLACK
+
+    def make_end(self):
+        self.color = RED
+
+    def make_visited(self):
+        if self.color not in (GREEN, RED):
+            self.color = BLUE
+
+    def make_path(self):
+        if self.color not in (GREEN, RED):
+            self.color = YELLOW
+
+    def draw(self, win):
+        pygame.draw.rect(win, self.color, (self.x, self.y, CELL_SIZE, CELL_SIZE))
+
+    def update_neighbors(self, grid):
+        self.neighbors = []
+        # Check Down
+        if self.row < ROWS - 1 and not grid[self.row + 1][self.col].is_wall():
+            self.neighbors.append(grid[self.row + 1][self.col])
+        # Check Up
+        if self.row > 0 and not grid[self.row - 1][self.col].is_wall():
+            self.neighbors.append(grid[self.row - 1][self.col])
+        # Check Right
+        if self.col < ROWS - 1 and not grid[self.row][self.col + 1].is_wall():
+            self.neighbors.append(grid[self.row][self.col + 1])
+        # Check Left
+        if self.col > 0 and not grid[self.row][self.col - 1].is_wall():
+            self.neighbors.append(grid[self.row][self.col - 1])
+
+    # Custom comparison operator for the priority queue (heapq)
+    def __lt__(self, other):
+        return self.distance < other.distance
+
+
+def make_grid():
+    grid = []
+    for i in range(ROWS):
+        grid.append([])
+        for j in range(ROWS):
+            node = Node(i, j)
+            grid[i].append(node)
+    return grid
+
+
+def draw_grid(win):
+    for i in range(ROWS):
+        pygame.draw.line(win, GREY, (0, i * CELL_SIZE), (WIDTH, i * CELL_SIZE))
+        pygame.draw.line(win, GREY, (i * CELL_SIZE, 0), (i * CELL_SIZE, WIDTH))
+
+
+def draw(win, grid):
+    win.fill(WHITE)
+    for row in grid:
+        for node in row:
+            node.draw(win)
+    draw_grid(win)
+    pygame.display.update()
+
+
+def get_clicked_pos(pos):
+    y, x = pos
+    row = y // CELL_SIZE
+    col = x // CELL_SIZE
+    return row, col
+
+
+def reconstruct_path(came_from, current, draw_fn):
+    while current in came_from:
+        current = came_from[current]
+        current.make_path()
+        draw_fn()
+
+
+def dijkstra(draw_fn, grid, start, end):
+    count = 0
+    # Min-priority queue storing tuples: (distance, insertion_count, node)
+    queue = []
+    heapq.heappush(queue, (0, count, start))
+    
+    came_from = {}
+    visited = {start}
+
+    while queue:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        current_dist, _, current = heapq.heappop(queue)
+
+        if current == end:
+            reconstruct_path(came_from, end, draw_fn)
+            return True
+
+        for neighbor in neighbor_list := current.neighbors:
+            # For an unweighted grid, every step edge weight is 1
+            temp_dist = current_dist + 1 
+
+            if temp_dist < neighbor.distance:
+                came_from[neighbor] = current
+                neighbor.distance = temp_dist
+                
+                if neighbor not in visited:
+                    count += 1
+                    visited.add(neighbor)
+                    heapq.heappush(queue, (neighbor.distance, count, neighbor))
+                    neighbor.make_visited()
+
+        draw_fn()
+        # Cap visualization frame rate so the search expansion is visible
+        pygame.time.delay(5) 
+
+    return False
+
+
+def main():
+    grid = make_grid()
+    start = None
+    end = None
+    run = True
+
+    while run:
+        draw(WINDOW, grid)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+
+            # Left Click: Place items
+            if pygame.mouse.get_pressed()[0]: 
+                pos = pygame.mouse.get_pos()
+                row, col = get_clicked_pos(pos)
+                node = grid[row][col]
+                
+                if not start and node != end:
+                    start = node
+                    start.make_start()
+                elif not end and node != start:
+                    end = node
+                    end.make_end()
+                elif node != end and node != start:
+                    node.make_wall()
+
+            # Right Click: Reset/Erase node
+            elif pygame.mouse.get_pressed()[2]: 
+                pos = pygame.mouse.get_pos()
+                row, col = get_clicked_pos(pos)
+                node = grid[row][col]
+                node.reset()
+                if node == start:
+                    start = None
+                elif node == end:
+                    end = None
+
+            if event.type == pygame.KEYDOWN:
+                # Spacebar: Start algorithm
+                if event.key == pygame.K_SPACE and start and end:
+                    for row in grid:
+                        for node in row:
+                            node.update_neighbors(grid)
+                    dijkstra(lambda: draw(WINDOW, grid), grid, start, end)
+
+                # 'c' key: Clear entire grid
+                if event.key == pygame.K_c:
+                    start = None
+                    end = None
+                    grid = make_grid()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
